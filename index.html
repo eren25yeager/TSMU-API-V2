@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMSU - Evaluation System</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --color-red: #d92525; --color-red-dark: #b81e1e; --color-black: #121212;
+            --color-white: #ffffff; --font-family: 'Cairo', sans-serif; --glow-color: rgba(217, 37, 37, 0.7   );
+        }
+        
+        html[data-theme="light"] { --bg: #f0f2f5; --font: #1c1e21; --card-bg: rgba(255, 255, 255, 0.9); --border: #e4e6eb; --card-shadow: 0 8px 32px rgba(0,0,0,0.1); }
+        html[data-theme="dark"] { --bg: var(--color-black); --font: #e4e6eb; --card-bg: rgba(30, 30, 30, 0.8); --border: #3a3b3c; --card-shadow: 0 8px 32px rgba(217, 37, 37, 0.2); }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { min-height: 100%; }
+        body {
+            font-family: var(--font-family); background-color: var(--bg); color: var(--font);
+            transition: background-color 0.3s, color 0.3s;
+            display: flex; align-items: center; justify-content: center;
+            padding: 100px 20px 40px; 
+        }
+        
+        #background-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
+        
+        .news-ticker {
+            position: fixed; top: 0; left: 0; width: 100%;
+            background-color: var(--color-red); color: var(--color-white);
+            padding: 8px 0; overflow: hidden; z-index: 1001;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3); display: flex; align-items: center;
+        }
+        .news-ticker-content {
+            display: inline-block; white-space: nowrap;
+            animation: ticker-scroll 25s linear infinite;
+            font-size: 1.1em; font-weight: 600; padding-left: 100%;
+        }
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-100%); }
+        }
+
+        .main-content { width: 100%; max-width: 800px; position: relative; z-index: 1; }
+        
+        .header {
+            text-align: center; margin-bottom: 40px; display: flex;
+            align-items: center; justify-content: center; gap: 40px;
+        }
+        .header-logo { width: 130px; height: 130px; object-fit: contain; border-radius: 8px; background-color: white; }
+        
+        .header h1 { 
+            font-size: 2.8em; font-weight: 700; color: var(--color-red); line-height: 1.2;
+            position: relative; display: inline-block;
+        }
+        .header h1 .cursor {
+            display: inline-block; width: 3px; height: 1em; background-color: var(--color-red);
+            animation: blink 0.7s infinite; position: absolute; right: -8px; bottom: 0.1em;
+        }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+        #results-container { display: none; width: 100%; max-width: 500px; margin: 0 auto; animation: slide-up 0.6s ease-out forwards; opacity: 0; transform: translateY(20px); }
+        @keyframes slide-up { to { opacity: 1; transform: translateY(0); } }
+
+        .search-box { 
+            background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; 
+            padding: 25px; box-shadow: var(--card-shadow); backdrop-filter: blur(10px);
+            max-width: 500px; margin: 0 auto;
+        }
+        #code-input { width: 100%; padding: 14px; font-size: 16px; border-radius: 8px; text-align: center; border: 1px solid var(--border); background-color: var(--bg); color: var(--font); }
+        
+        .button-group { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .btn { width: 100%; padding: 14px; font-size: 18px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none; }
+        .btn-primary { color: var(--color-white); background-color: var(--color-red); border: none; }
+        .btn-primary:hover { background-color: var(--color-red-dark); }
+        .btn-secondary { color: var(--color-red); background-color: transparent; border: 2px solid var(--color-red); }
+        .btn-secondary:hover { background-color: var(--color-red); color: var(--color-white); }
+        
+        #loader-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; backdrop-filter: blur(5px); }
+        #loader-container.visible { opacity: 1; visibility: visible; }
+        .scanner { width: 200px; height: 160px; border: 3px solid var(--color-red); border-radius: 10px; position: relative; overflow: hidden; box-shadow: 0 0 20px var(--glow-color); }
+        .scanner::after { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 5px; background: linear-gradient(90deg, transparent, var(--glow-color), transparent); animation: scan 2s linear infinite; }
+        @keyframes scan { 0% { top: 0; } 100% { top: 155px; } }
+        #loader-text { margin-top: 20px; font-size: 1.2em; color: var(--glow-color); letter-spacing: 2px; text-transform: uppercase; }
+
+        .profile-card, .evaluation-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 25px; box-shadow: var(--card-shadow); backdrop-filter: blur(10px); width: 100%; }
+        .profile-card { display: grid; grid-template-columns: 140px 1fr; gap: 25px; align-items: center; }
+        .profile-avatar { width: 140px; height: 155px; position: relative; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); background-color: var(--color-red); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 0.3s ease, filter 0.3s ease; }
+        .profile-avatar:hover { transform: scale(1.05); filter: drop-shadow(0 0 15px var(--glow-color)); }
+        .profile-avatar-inner { width: calc(100% - 10px); height: calc(100% - 10px); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); background: var(--bg); display: flex; align-items: center; justify-content: center; }
+        .profile-avatar img { width: 100%; height: 100%; object-fit: cover; }
+        .profile-avatar-placeholder { font-size: 4.5em; font-weight: 700; color: var(--color-red); }
+        .profile-info h2 { font-size: 2em; font-weight: 700; margin: 0; line-height: 1.2; }
+        .profile-info p { font-size: 1.2em; color: var(--color-red); margin: 5px 0 0; }
+        .profile-status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .status-item { background: var(--bg); padding: 10px; border-radius: 10px; text-align: center; }
+        .status-item .title { font-size: 0.85em; opacity: 0.7; margin-bottom: 5px; }
+        .status-item .value { font-size: 1.1em; font-weight: 700; }
+        .evaluation-card { margin-top: 20px; }
+        .score-display { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 25px; }
+        .score-card { text-align: center; }
+        .chart-container { position: relative; width: 130px; height: 130px; margin: 0 auto 10px; }
+        .chart-value { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 1.8em; font-weight: 700; }
+        .score-card .title { font-size: 1em; font-weight: 600; opacity: 0.8; }
+        .details-section { margin-top: 20px; }
+        .accordion-header { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 15px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-size: 1.1em; font-weight: 600; margin-bottom: 10px; }
+        .accordion-header .icon-right { transition: transform 0.3s; }
+        .accordion-header.active .icon-right { transform: rotate(180deg); }
+        .accordion-content { max-height: 0; overflow: hidden; transition: max-height 0.4s ease-out; background: var(--bg); border-radius: 10px; }
+        .details-table { width: 100%; border-collapse: collapse; }
+        .details-table tr { border-bottom: 1px solid var(--border); }
+        .details-table tr:last-child { border-bottom: none; }
+        .details-table td { padding: 12px 15px; text-align: left; }
+        .details-table td:first-child { opacity: 0.8; }
+        .details-table td:last-child { font-weight: 600; text-align: right; }
+        .comment-box { padding: 15px; text-align: left; }
+        .comment-box p { margin: 0; line-height: 1.6; }
+        .comment-box .no-comment { opacity: 0.5; font-style: italic; }
+        .card-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 25px; }
+        .card-actions .btn { padding: 10px 15px; font-size: 14px; flex-grow: 1; }
+        .btn-new-search { color: var(--font); background-color: transparent; border: 2px solid var(--border); }
+        .btn-new-search:hover { background-color: var(--border); }
+        
+        .top-controls {
+            position: fixed; top: 55px; left: 15px; z-index: 10;
+        }
+        .control-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--border); background: var(--card-bg); color: var(--font); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+        
+        #image-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s; }
+        #image-modal.visible { opacity: 1; visibility: visible; }
+        #image-modal-content { max-width: 90%; max-height: 90%; animation: zoom-in 0.4s ease-out; border-radius: 10px; }
+        @keyframes zoom-in { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        #image-modal-close { position: absolute; top: 20px; right: 30px; font-size: 2.5em; color: white; cursor: pointer; transition: transform 0.2s; }
+        #image-modal-close:hover { transform: scale(1.2); }
+    </style>
+</head>
+<body>
+    <div class="news-ticker">
+        <div class="news-ticker-content">
+            لجنة الموارد البشرية المركزية اتحاد طلاب تحيا مصر &nbsp; ★ &nbsp; Central Human Resources , Tahya Misr Student Union &nbsp; ★ &nbsp; 
+        </div>
+    </div>
+
+    <canvas id="background-canvas"></canvas>
+    <div id="loader-container"><div class="scanner"></div><p id="loader-text">Analyzing Data</p></div>
+    
+    <div class="top-controls">
+        <button id="theme-toggle" class="control-btn" title="Toggle Theme"><i class="fas fa-moon"></i></button>
+    </div>
+
+    <div class="main-content" id="main-content">
+        <div class="header">
+            <img src="https://lh3.googleusercontent.com/d/10Yu16kVso0XYohV6jBwkiRhrkFwxvRX8" alt="Logo 1" class="header-logo">
+            <h1 id="animated-title"><span class="text"></span><span class="cursor"></span></h1>
+            <img src="https://lh3.googleusercontent.com/d/10ggZb3hhefbbWaa3mqLqdvxlY0Dmy6Fj" alt="Logo 2" class="header-logo">
+        </div>
+        <div class="search-box">
+            <input type="text" id="code-input" placeholder="Enter Member ID">
+            <div class="button-group">
+                <button id="search-btn" class="btn btn-primary"><i class="fas fa-search"></i> Analyze</button>
+                <a href="https://docs.google.com/forms/d/e/1FAIpQLSfh9MTlGCh4YNmFazSKapdDm_ISOLVIghNH2Tqu3_zrdxUBmQ/viewform?usp=header" target="_blank" class="btn btn-secondary">
+                    <i class="fas fa-exclamation-triangle"></i> Submit a Complaint
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div id="results-container"></div>
+
+    <div id="image-modal">
+        <span id="image-modal-close">&times;</span>
+        <img id="image-modal-content" src="" alt="Enlarged Member Photo">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function( ) {
+            const tickerContent = document.querySelector('.news-ticker-content');
+            tickerContent.innerHTML += tickerContent.innerHTML;
+
+            const titleElement = document.getElementById('animated-title').querySelector('.text');
+            const fullTitle = "Tahya Misr Student Union";
+            let charIndex = 0;
+
+            function typeWriter() {
+                if (charIndex < fullTitle.length) {
+                    titleElement.textContent += fullTitle.charAt(charIndex);
+                    charIndex++;
+                    setTimeout(typeWriter, 100);
+                } else {
+                    const cursor = document.querySelector('.header h1 .cursor');
+                    if (cursor) {
+                        setTimeout(() => { cursor.style.display = 'none'; }, 1000);
+                    }
+                }
+            }
+            setTimeout(typeWriter, 500);
+
+            const mainContent = document.getElementById('main-content');
+            const codeInput = document.getElementById('code-input');
+            const searchBtn = document.getElementById('search-btn');
+            const loaderContainer = document.getElementById('loader-container');
+            const resultsContainer = document.getElementById('results-container');
+            const themeToggle = document.getElementById('theme-toggle');
+            let currentMemberCode = null;
+
+            async function handleSearch() {
+                currentMemberCode = codeInput.value.trim();
+                if (!currentMemberCode) { alert('Please enter a Member ID.'); return; }
+                
+                loaderContainer.classList.add('visible');
+                mainContent.style.display = 'none';
+                resultsContainer.style.display = 'none';
+                resultsContainer.innerHTML = '';
+
+                try {
+                    const response = await fetch(`/api/get-data?code=${encodeURIComponent(currentMemberCode)}`);
+                    const res = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(res.message || 'An unknown server error occurred.');
+                    }
+                    
+                    displayResults(res);
+
+                } catch (error) {
+                    console.error("Fetch Error:", error);
+                    displayError({ message: error.message });
+                }
+            }
+            
+            function resetToSearch() {
+                resultsContainer.style.display = 'none';
+                mainContent.style.display = 'block';
+                codeInput.value = '';
+                currentMemberCode = null;
+            }
+
+            function displayResults(res) {
+                loaderContainer.classList.remove('visible');
+                if (!res.found || !res.data) {
+                    alert(res.message || 'Member ID not found.');
+                    resetToSearch();
+                    return;
+                }
+                
+                const member = res.data;
+                
+                let avatarContent;
+                const photoUrl = member['DirectPhotoLink'];
+                if (photoUrl && String(photoUrl).trim() !== '') {
+                    avatarContent = `<img src="${photoUrl}" alt="Member Photo">`;
+                } else {
+                    const initial = member.Name ? member.Name.charAt(0).toUpperCase() : '?';
+                    avatarContent = `<div class="profile-avatar-placeholder">${initial}</div>`;
+                }
+
+                let percentage = parseFloat(member['%'] || 0).toFixed(2);
+                let totalScore = parseInt(member.Total || 0);
+                const maxTotalScore = 100; 
+
+                let performanceHtml = '';
+                const performanceKeys = ['Quality of the task', 'Quantity of the task', 'Attendence', 'Communication', 'Flexibility', 'Teamwork', 'Technical Knowledge', 'Bonus'];
+                performanceKeys.forEach(key => {
+                    const value = member[key] || 'N/A';
+                    performanceHtml += `<tr><td>${key}</td><td>${value}</td></tr>`;
+                });
+
+                let adminHtml = '';
+                const adminKeys = ['Freezing', 'Attention', 'Alarm'];
+                adminKeys.forEach(key => {
+                    if (member[key] !== undefined && String(member[key]).trim() !== '') {
+                        adminHtml += `<tr><td>${key}</td><td>${member[key]}</td></tr>`;
+                    }
+                });
+
+                const commentText = (member.Comment && String(member.Comment).trim() !== '') 
+                    ? `<p>${member.Comment}</p>`
+                    : '<p class="no-comment">No comment provided.</p>';
+
+                resultsContainer.innerHTML = `
+                    <div class="profile-card">
+                        <div class="profile-avatar">
+                            <div class="profile-avatar-inner">${avatarContent}</div>
+                        </div>
+                        <div class="profile-info">
+                            <h2>${member.Name || 'Unknown'}</h2>
+                            <p>${member.Committee || 'No Committee'}</p>
+                            <div class="profile-status-grid">
+                                <div class="status-item">
+                                    <div class="title">Appreciation</div>
+                                    <div class="value">${member.Appreciation || 'N/A'}</div>
+                                </div>
+                                <div class="status-item">
+                                    <div class="title">Final Status</div>
+                                    <div class="value">${member.Status || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="evaluation-card">
+                        <div class="score-display">
+                            <div class="score-card">
+                                <div class="chart-container">
+                                    <canvas id="totalScoreChart"></canvas>
+                                    <div class="chart-value" id="totalScoreValue">${totalScore}</div>
+                                </div>
+                                <div class="title">Total Score</div>
+                            </div>
+                            <div class="score-card">
+                                <div class="chart-container">
+                                    <canvas id="percentageChart"></canvas>
+                                    <div class="chart-value" id="percentageValue">${percentage}%</div>
+                                </div>
+                                <div class="title">Percentage</div>
+                            </div>
+                        </div>
+
+                        <div class="details-section">
+                            <div class="accordion-item">
+                                <div class="accordion-header">
+                                    <span><i class="fas fa-tasks fa-fw" style="margin-right: 8px; color: var(--color-red);"></i> Performance Evaluation</span>
+                                    <i class="fas fa-chevron-down icon-right"></i>
+                                </div>
+                                <div class="accordion-content"><table class="details-table">${performanceHtml}</table></div>
+                            </div>
+                            
+                            ${adminHtml ? `
+                            <div class="accordion-item">
+                                <div class="accordion-header">
+                                    <span><i class="fas fa-user-shield fa-fw" style="margin-right: 8px; color: var(--color-red);"></i> Administrative Status</span>
+                                    <i class="fas fa-chevron-down icon-right"></i>
+                                </div>
+                                <div class="accordion-content"><table class="details-table">${adminHtml}</table></div>
+                            </div>` : ''}
+
+                            <div class="accordion-item">
+                                <div class="accordion-header">
+                                    <span><i class="fas fa-comment-dots fa-fw" style="margin-right: 8px; color: var(--color-red);"></i> Final Comment</span>
+                                    <i class="fas fa-chevron-down icon-right"></i>
+                                </div>
+                                <div class="accordion-content"><div class="comment-box">${commentText}</div></div>
+                            </div>
+                        </div>
+                        
+                        <div class="card-actions">
+                            <button id="new-search-btn" class="btn btn-new-search"><i class="fas fa-search"></i> New Search</button>
+                            <button id="export-pdf-btn" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Export PDF</button>
+                            <a href="https://docs.google.com/forms/d/e/1FAIpQLSfh9MTlGCh4YNmFazSKapdDm_ISOLVIghNH2Tqu3_zrdxUBmQ/viewform?usp=header" target="_blank" class="btn btn-secondary">
+                                <i class="fas fa-exclamation-triangle"></i> Complaint
+                            </a>
+                        </div>
+                    </div>`;
+                
+                resultsContainer.style.display = 'block';
+
+                createDoughnutChart('totalScoreChart', totalScore, maxTotalScore, document.documentElement.getAttribute('data-theme'   ));
+                createDoughnutChart('percentageChart', percentage, 100, document.documentElement.getAttribute('data-theme'));
+                
+                document.getElementById('new-search-btn' ).addEventListener('click', resetToSearch);
+                document.getElementById('export-pdf-btn').addEventListener('click', handlePdfExport);
+                
+                document.querySelectorAll('.accordion-header').forEach(header => {
+                    header.addEventListener('click', () => {
+                        const content = header.nextElementSibling;
+                        header.classList.toggle('active');
+                        if (content.style.maxHeight) {
+                            content.style.maxHeight = null;
+                        } else {
+                            content.style.maxHeight = content.scrollHeight + "px";
+                        }
+                    });
+                });
+
+                if (photoUrl && String(photoUrl).trim() !== '') {
+                    setupImageModal(photoUrl);
+                }
+            }
+
+            function createDoughnutChart(canvasId, value, maxValue, theme) {
+                const ctx = document.getElementById(canvasId).getContext('2d');
+                const remainingValue = maxValue - value;
+                const chartColor = '#d92525';
+                const trackColor = theme === 'dark' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        datasets: [{
+                            data: [value, remainingValue],
+                            backgroundColor: [chartColor, trackColor],
+                            borderWidth: 0,
+                            borderRadius: 5,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '80%',
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { enabled: false }
+                        },
+                        animation: {
+                            duration: 1500,
+                            easing: 'easeOutBounce'
+                        }
+                    }
+                });
+            }
+
+            function setupImageModal(imageUrl) {
+                const avatar = document.querySelector('.profile-avatar');
+                const modal = document.getElementById('image-modal');
+                const modalImg = document.getElementById('image-modal-content');
+                const closeBtn = document.getElementById('image-modal-close');
+
+                avatar.addEventListener('click', () => {
+                    modal.classList.add('visible');
+                    modalImg.src = imageUrl;
+                });
+
+                const closeModal = () => modal.classList.remove('visible');
+                closeBtn.addEventListener('click', closeModal);
+                modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+            }
+
+            function handlePdfExport() {
+                alert("PDF export functionality is currently under development for this platform.");
+            }
+
+            function displayError(error) {
+                loaderContainer.classList.remove('visible');
+                resetToSearch();
+                alert(`An error occurred: ${error.message}`);
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem('theme', theme);
+                themeToggle.innerHTML = theme === 'light' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+            }
+
+            searchBtn.addEventListener('click', handleSearch);
+            codeInput.addEventListener('keypress', (event) => { if (event.key === "Enter") { searchBtn.click(); } });
+            themeToggle.addEventListener('click', () => {
+                const newTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+                applyTheme(newTheme);
+            });
+
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            applyTheme(savedTheme);
+
+            const canvas = document.getElementById('background-canvas');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+
+            function setupCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                createParticles();
+            }
+
+            function createParticles() {
+                particles = [];
+                let numParticles = window.innerWidth > 768 ? 100 : 30;
+                for (let i = 0; i < numParticles; i++) {
+                    particles.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        size: Math.random() * 1.5 + 0.5,
+                        speedX: Math.random() * 0.4 - 0.2,
+                        speedY: Math.random() * 0.4 - 0.2
+                    });
+                }
+            }
+
+            function animateParticles() {
+                if (ctx) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    const currentTheme = document.documentElement.getAttribute('data-theme');
+                    ctx.fillStyle = (currentTheme === 'dark') ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.3)';
+                    particles.forEach(p => {
+                        p.x += p.speedX;
